@@ -6,3 +6,6 @@ start-db-background:
 
 setup-db:
   echo "define namespace test; use namespace test; define database test;" | docker run --rm --network host surrealdb/surrealdb:latest sql
+
+htmx:
+  cd htmx && cargo run

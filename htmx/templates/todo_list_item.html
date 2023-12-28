@@ -1,0 +1,52 @@
+{% set api_url = "/todo/{}"|format(todo.id.id.clone()) %} {% set value =
+todo.content.clone() %}
+<li>
+  <div>
+    <a
+      href="#"
+      role="button"
+      class="outline"
+      hx-delete="{{api_url}}"
+      hx-swap="delete"
+      hx-target="closest li"
+    >
+      <i class="fas fa-times"> </i>
+    </a>
+    <a
+      href="#"
+      role="button"
+      class="outline"
+      _="on click hide closest <div/> then show next <form/>"
+    >
+      <i class="fas fa-edit"></i>
+    </a>
+    <span>{{value}}</span>
+  </div>
+  <form style="display: none" action="/todo/id" hx-boost="true">
+    <a
+      href="#"
+      role="button"
+      _="on click hide closest <form/> then show previous <div/>"
+    >
+      <i class="fas fa-chevron-left"></i>
+    </a>
+    <button
+      type="submit"
+      style="display: inline-block; width: auto"
+      hx-patch="{{api_url}}"
+      hx-ext="json-enc"
+      hx-trigger="click"
+      hx-swap="outerHTML"
+      hx-target="closest li"
+    >
+      <i class="fas fa-check-square"></i>
+    </button>
+    <input
+      style="display: inline-block; width: auto"
+      type="text"
+      name="content"
+      placeholder="Todo content"
+      value="{{value}}"
+    />
+  </form>
+</li>

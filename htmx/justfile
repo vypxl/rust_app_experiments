@@ -1,0 +1,5 @@
+watch:
+  find src templates static | entr -r just run
+
+run:
+  cargo run
