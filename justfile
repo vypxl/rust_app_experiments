@@ -9,3 +9,6 @@ setup-db:
 
 htmx:
   cd htmx && cargo run
+
+dioxus:
+  cd dioxus && cargo run

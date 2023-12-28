@@ -1,0 +1,5 @@
+watch:
+  dx serve --hot-reload --platform desktop
+
+run:
+  cargo run
