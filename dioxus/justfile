@@ -1,5 +1,3 @@
-watch:
-  dx serve --hot-reload --platform desktop
-
 run:
-  cargo run
+  dx build --features web
+  dx serve --features ssr --hot-reload --platform desktop

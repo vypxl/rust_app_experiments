@@ -1,45 +1,105 @@
-use axum::{extract::ws::WebSocketUpgrade, response::Html, routing::get, Router};
+#![allow(non_snake_case, unused)]
 use dioxus::prelude::*;
+use dioxus_fullstack::prelude::*;
+use once_cell::sync::Lazy;
+use serde::{Deserialize, Serialize};
+use std::future::IntoFuture;
+use surrealdb::{
+    engine::remote::ws::{Client, Ws},
+    sql::Thing,
+    Surreal,
+};
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let listen_addr: std::net::SocketAddr = ([127, 0, 0, 1], 8080).into();
+#[cfg(feature = "ssr")]
+static DB: Lazy<Surreal<Client>> = Lazy::new(Surreal::init);
 
-    let view = dioxus_liveview::LiveViewPool::new();
+fn main() -> anyhow::Result<()> {
+    let launcher = LaunchBuilder::new(app);
 
-    let app = Router::new()
-        .route(
-            "/",
-            get(move || async move {
-                Html(format!(
-                    r#"
-                <!DOCTYPE html>
-                <html>
-                <head> <title>Dioxus LiveView with Axum</title>  </head>
-                <body> <div id="main"></div> </body>
-                {glue}
-                </html>
-                "#,
-                    glue = dioxus_liveview::interpreter_glue(&format!("ws://{listen_addr}/ws"))
-                ))
-            }),
-        )
-        .route(
-            "/ws",
-            get(move |ws: WebSocketUpgrade| async move {
-                ws.on_upgrade(move |socket| async move {
-                    _ = view.launch(dioxus_liveview::axum_socket(socket), app).await;
-                })
-            }),
+    #[cfg(feature = "ssr")]
+    {
+        let launcher = launcher.incremental(
+            IncrementalRendererConfig::default()
+                .invalidate_after(std::time::Duration::from_secs(120)),
         );
-    println!("Listening on {listen_addr}");
+        tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(async move {
+                DB.connect::<Ws>("localhost:8000").await?;
+                DB.use_ns("test").use_db("test").await?;
 
-    axum::Server::bind(&listen_addr)
-        .serve(app.into_make_service())
-        .await?;
+                launcher.launch_server().await;
+                Ok::<(), anyhow::Error>(())
+            });
+    }
+    #[cfg(not(feature = "ssr"))]
+    {
+        #[cfg(feature = "web")]
+        launcher.launch_web();
+        #[cfg(feature = "desktop")]
+        launcher.launch_desktop();
+    }
+
     Ok(())
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Todo {
+    content: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct TodoRecord {
+    id: Thing,
+    content: String,
+}
+
+#[server]
+async fn get_todos() -> Result<Vec<Todo>, ServerFnError> {
+    println!("get_todos");
+    let todos: Vec<TodoRecord> = DB.select::<Vec<TodoRecord>>("todo").await?;
+    println!("got todos");
+    let todos = todos
+        .into_iter()
+        .map(|todo| Todo {
+            content: todo.content,
+        })
+        .collect::<Vec<_>>();
+    Ok(todos)
+}
+
+#[component]
+fn TodoListItem(cx: Scope, todo: Todo) -> Element {
+    cx.render(rsx! { todo.content.clone() })
+}
+
+#[component]
+fn TodoList(cx: Scope, todos: Vec<Todo>) -> Element {
+    cx.render(rsx! {
+        ul {
+            todos.iter().map(|todo| rsx! {
+                li { TodoListItem { todo: todo.clone() } }
+            })
+        }
+    })
+}
+
 fn app(cx: Scope) -> Element {
-    cx.render(rsx! { div { "Hello World" }})
+    let todos = use_server_future(cx, (), |_| async { get_todos().await })?;
+
+    let todos_val = todos.value();
+    let todo_list = match todos_val.as_ref() {
+        Ok(todos) => rsx! { TodoList { todos: todos.clone() } },
+        Err(err) => rsx! { "oh no: {err.to_string()}" },
+    };
+
+    cx.render(rsx! {
+        main {
+            class: "container",
+            h1 { "Todo App" }
+            div {
+               todo_list
+            }
+        }
+    })
 }
